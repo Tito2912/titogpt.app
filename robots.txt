@@ -3,4 +3,4 @@ Allow: /
 Disallow: /private/
 Disallow: /tmp/
 
-Sitemap: https://titogpt.com/sitemap.xml
+Sitemap: https://titogpt.app/sitemap.xml
