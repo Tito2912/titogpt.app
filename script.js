@@ -1,4 +1,89 @@
 document.addEventListener('DOMContentLoaded', function () {
+  const loadedScripts = new Map();
+
+  function loadScriptOnce(src) {
+    if (!src) return Promise.reject(new Error('Missing src'));
+    if (loadedScripts.has(src)) return loadedScripts.get(src);
+
+    const p = new Promise((resolve, reject) => {
+      const existing = document.querySelector(`script[src="${src}"]`);
+      if (existing) {
+        if (existing.dataset.loaded === '1') return resolve();
+        existing.addEventListener('load', () => resolve(), { once: true });
+        existing.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)), { once: true });
+        return;
+      }
+
+      const s = document.createElement('script');
+      s.src = src;
+      s.defer = true;
+      s.addEventListener('load', () => {
+        s.dataset.loaded = '1';
+        resolve();
+      }, { once: true });
+      s.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)), { once: true });
+      document.head.appendChild(s);
+    });
+
+    loadedScripts.set(src, p);
+    return p;
+  }
+
+  // Cookie banner (keeps HTML onclick="acceptCookies()")
+  const cookieBanner = document.getElementById('cookie-banner');
+  window.acceptCookies = function () {
+    if (!cookieBanner) return;
+    cookieBanner.style.display = 'none';
+    localStorage.setItem('cookieAccepted', 'true');
+  };
+  if (cookieBanner && localStorage.getItem('cookieAccepted')) {
+    cookieBanner.remove();
+  }
+
+  // Newsletter form (index page only)
+  const newsletterForm = document.getElementById('newsletter-form');
+  if (newsletterForm) {
+    newsletterForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      const emailInput = document.getElementById('newsletter-email');
+      const messageDiv = document.getElementById('newsletter-message');
+      const email = (emailInput?.value || '').trim();
+      if (!messageDiv) return;
+      messageDiv.style.display = 'none';
+
+      const endpoint =
+        'https://script.google.com/macros/s/AKfycbwNHd8nt-tSi6WxhIH5eVIYhS3H06K2IVXNiEgoJ_i126UGlL4JacrKHSDqcYVDEws6lw/exec';
+
+      fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.status === 'success') {
+            messageDiv.textContent = '✅ Merci ! Vous serez prévenu lors du lancement.';
+            messageDiv.style.color = '#21e6c1';
+            messageDiv.style.display = 'block';
+            newsletterForm.reset();
+          } else if (data.status === 'duplicate') {
+            messageDiv.textContent = '⚠️ Cet email est déjà inscrit.';
+            messageDiv.style.color = '#ffc107';
+            messageDiv.style.display = 'block';
+          } else {
+            messageDiv.textContent = '❌ Une erreur s’est produite. Veuillez réessayer.';
+            messageDiv.style.color = '#ff4c60';
+            messageDiv.style.display = 'block';
+          }
+        })
+        .catch(() => {
+          messageDiv.textContent = '❌ Erreur réseau. Veuillez réessayer.';
+          messageDiv.style.color = '#ff4c60';
+          messageDiv.style.display = 'block';
+        });
+    });
+  }
+
   // Loader
   window.addEventListener('load', function () {
     const loader = document.querySelector('.loader');
@@ -12,41 +97,52 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Typed.js animation
   if (document.querySelector('.typed-text')) {
-    new Typed('.typed-text', {
-      strings: ['Révolutionnez', 'Transformez', 'Automatisez', 'Créez'],
-      typeSpeed: 100,
-      backSpeed: 50,
-      loop: true,
-      showCursor: false
-    });
+    loadScriptOnce('/vendor/typed.2.0.12.js')
+      .then(() => {
+        if (!window.Typed) return;
+        new Typed('.typed-text', {
+          strings: ['Révolutionnez', 'Transformez', 'Automatisez', 'Créez'],
+          typeSpeed: 100,
+          backSpeed: 50,
+          loop: true,
+          showCursor: false
+        });
+      })
+      .catch(() => {});
   }
 
   // Particles.js turquoise
   if (document.getElementById('particles-js')) {
-    particlesJS('particles-js', {
-      particles: {
-        number: { value: 80, density: { enable: true, value_area: 800 } },
-        color: { value: "#21e6c1" },
-        shape: { type: "circle" },
-        opacity: { value: 0.45, random: true },
-        size: { value: 3, random: true },
-        line_linked: { enable: true, distance: 150, color: "#21e6c1", opacity: 0.17, width: 1 },
-        move: { enable: true, speed: 2, direction: "none", random: true, straight: false, out_mode: "out" }
-      },
-      interactivity: {
-        detect_on: "canvas",
-        events: {
-          onhover: { enable: true, mode: "repulse" },
-          onclick: { enable: true, mode: "push" }
-        }
-      }
-    });
+    loadScriptOnce('https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js')
+      .then(() => {
+        if (!window.particlesJS) return;
+        particlesJS('particles-js', {
+          particles: {
+            number: { value: 80, density: { enable: true, value_area: 800 } },
+            color: { value: "#21e6c1" },
+            shape: { type: "circle" },
+            opacity: { value: 0.45, random: true },
+            size: { value: 3, random: true },
+            line_linked: { enable: true, distance: 150, color: "#21e6c1", opacity: 0.17, width: 1 },
+            move: { enable: true, speed: 2, direction: "none", random: true, straight: false, out_mode: "out" }
+          },
+          interactivity: {
+            detect_on: "canvas",
+            events: {
+              onhover: { enable: true, mode: "repulse" },
+              onclick: { enable: true, mode: "push" }
+            }
+          }
+        });
+      })
+      .catch(() => {});
   }
 
   // Animation 3D turquoise avec Three.js
   function init3DAnimation() {
     const canvas = document.getElementById('hero-3d');
     if (!canvas) return;
+    if (!window.THREE) return;
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
@@ -93,13 +189,20 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   // Initialiser l'animation 3D quand le canvas est prêt
-  const canvasObserver = new MutationObserver((mutations, observer) => {
-    if (document.getElementById('hero-3d')) {
-      init3DAnimation();
-      observer.disconnect();
-    }
-  });
-  canvasObserver.observe(document.body, { childList: true, subtree: true });
+  function maybeInit3D() {
+    if (!document.getElementById('hero-3d')) return false;
+    loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js')
+      .then(() => init3DAnimation())
+      .catch(() => {});
+    return true;
+  }
+
+  if (!maybeInit3D()) {
+    const canvasObserver = new MutationObserver((mutations, observer) => {
+      if (maybeInit3D()) observer.disconnect();
+    });
+    canvasObserver.observe(document.body, { childList: true, subtree: true });
+  }
 
   // GSAP Animations
   gsap.registerPlugin(ScrollTrigger);
@@ -177,11 +280,8 @@ document.addEventListener('DOMContentLoaded', function () {
       const target = document.querySelector(href);
       if (target) {
         e.preventDefault();
-        gsap.to(window, {
-          scrollTo: { y: target, offsetY: 80 },
-          duration: 1,
-          ease: "power2.inOut"
-        });
+        const y = target.getBoundingClientRect().top + window.scrollY - 80;
+        window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
         if (window.innerWidth <= 992) {
           document.querySelector('.mobile-menu').style.display = "none";
           document.querySelector('.menu-toggle').classList.remove('open');
